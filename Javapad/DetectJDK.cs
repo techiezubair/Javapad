@@ -1,16 +1,20 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Resources;
 using System.Text;
+using System.Windows.Forms;
 
 namespace Javapad
 {
     public class DetectJDK
     {
         List<string> list = new List<string>();
+        private bool jdkFound = false;
         private string jdkpath = "";
         private string[] paths = {
             Path.GetDirectoryName(Assembly.GetEntryAssembly().Location),
@@ -19,13 +23,13 @@ namespace Javapad
             @"C:\users\",
             @"C:\"
         };
+        
         public string javacpath
         {
             get { return jdkpath; }
         }
         public void Begin()
         {
-            //Console.WriteLine("starting value: " + Properties.Settings.Default.jdkFound);
             BeginSearch(paths);
         }
         public string JDKpath
@@ -35,46 +39,55 @@ namespace Javapad
                 return jdkpath = jdkpath.Replace("javac.exe", "");
             }
         }
+        public bool JDKFound
+        {
+            get
+            {
+                return jdkFound;
+            }
+        }
         private void BeginSearch(string[] path)
         {
-            // first check if jdk has not been found
-            if (!Properties.Settings.Default.jdkFound)
+            RegistryManager.Init();
+            if(!RegistryManager.JDKFound)
             {
-                // first look if the path exists
-                try
+                // first check if jdk has not been found
+                if (!jdkFound)
                 {
-                    Process proc = new Process();
-                    proc.StartInfo.UseShellExecute = false;
-                    proc.StartInfo.FileName = "javac";
-                    proc.StartInfo.CreateNoWindow = true;
-                    proc.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-                    proc.Start();
-                    proc.Close();
-                    Properties.Settings.Default.jdkFound = true;
-                    Properties.Settings.Default.Save();
-                }
-                catch (System.ComponentModel.Win32Exception ex)
-                {
-                    for (int i = 0; i < path.Length; i++)
+                    // first look if the path exists
+                    try
                     {
-                        if (Directory.Exists(path[i]))
+                        Process proc = new Process();
+                        proc.StartInfo.UseShellExecute = false;
+                        proc.StartInfo.FileName = "javac";
+                        proc.StartInfo.CreateNoWindow = true;
+                        proc.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                        proc.Start();
+                        proc.Close();
+                        jdkFound = true;
+                    }
+                    catch (System.ComponentModel.Win32Exception ex)
+                    {
+                        for (int i = 0; i < path.Length; i++)
                         {
-                            if (list.Count  > 0)
+                            if (Directory.Exists(path[i]))
                             {
-                                Properties.Settings.Default.jdkFound = true;
-                                string p = list[0].Replace("javac.exe", "");
-                                //Console.WriteLine("found path : " + p);
-                                Properties.Settings.Default.jdkPath = p;
-                                Properties.Settings.Default.Save();
-                            }
-                            else
-                            {
-                                RecurseFind(path[i], list);
-                            }
+                                if (list.Count > 0)
+                                {
+                                    string p = list[0].Replace("javac.exe", "");
+                                    jdkFound = true;
+                                    jdkpath = p;
+                                }
+                                else
+                                {
+                                    RecurseFind(path[i], list);
+                                }
 
+                            }
                         }
                     }
                 }
+                RegistryManager.UpdateJDK(jdkFound, jdkpath);
             }
         }
         private void RecurseFind(string path, List<string> list)
@@ -87,17 +100,20 @@ namespace Javapad
 
                 if (list.Count < 2) // look for javac and java.exe and if found then stop the search!
                 {
-
                     // loop for javac.exe first... then check for java in the same folder
                     foreach (string s in fl)
                     {
-                        //Console.WriteLine(s);
                         if (s.Contains("javac.exe"))
                         {
-                            list.Add(s);
-                            jdkpath = s;
+                            //string p = s.Replace("javac.exe", "");
+                            ////list.Add(s);
+                            //jdkpath = p;
+                            //jdkFound = true;
                             if (File.Exists(s.Replace("javac.exe", "java.exe")))
                             {
+                                string p = s.Replace("javac.exe", "");
+                                jdkpath = p;
+                                jdkFound = true;
                                 list.Add(s);
                             }
                         }
@@ -105,18 +121,14 @@ namespace Javapad
                     }
                     foreach (string s in dl)
                     {
-                        //Console.WriteLine(s);
                         var str = s.Split('\\').Reverse().Take(1).ToArray();
                         if (s.Contains("All Users") || s.ToLower().Contains("default") || s.ToLower().Contains("public") || s.ToLower().Contains("syste") || str[0].Substring(0, 1).Contains(".") ||
                             s.Contains("Local") || s.Contains("Roaming") || s.ToLower().Contains("pictures") || s.ToLower().Contains("music") || s.ToLower().Contains("videos") ||
-                            s.ToLower().Contains("windows") || s.ToLower().Contains("programdata") || s.ToLower().Contains("recovery"))
-                        {
-
-                        }
+                            s.ToLower().Contains("windows") || s.ToLower().Contains("programdata") || s.ToLower().Contains("recovery")) { }
+                        
                         else
-                        {
                             RecurseFind(s, list);
-                        }
+                        
                     }
 
                 }

@@ -9,9 +9,10 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Javapad</RootNamespace>
     <AssemblyName>Javapad</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
-    <TargetFrameworkProfile>Client</TargetFrameworkProfile>
+    <TargetFrameworkProfile>
+    </TargetFrameworkProfile>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <PublishUrl>C:\Users\zubai\Documents\Visual Studio 2015\Published\</PublishUrl>
     <Install>true</Install>
@@ -26,7 +27,7 @@
     <ProductName>Javapad</ProductName>
     <PublisherName>Javapad</PublisherName>
     <SuiteName>ALPHA version</SuiteName>
-    <ApplicationRevision>2</ApplicationRevision>
+    <ApplicationRevision>8</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <CreateDesktopShortcut>true</CreateDesktopShortcut>
@@ -42,6 +43,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -51,12 +53,13 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationIcon>javapad_icon.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup>
-    <SignManifests>true</SignManifests>
+    <SignManifests>false</SignManifests>
   </PropertyGroup>
   <PropertyGroup>
     <ManifestCertificateThumbprint>C62045A7791441B45251F56200553787AF7ECECB</ManifestCertificateThumbprint>
@@ -76,9 +79,52 @@
   <PropertyGroup>
     <ApplicationManifest>Properties\app.manifest</ApplicationManifest>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x64\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>ManagedMinimumRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <OutputPath>bin\x64\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>ManagedMinimumRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x86\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>ManagedMinimumRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
+    <OutputPath>bin\x86\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>ManagedMinimumRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -96,39 +142,93 @@
     <Compile Include="About.Designer.cs">
       <DependentUpon>About.cs</DependentUpon>
     </Compile>
+    <Compile Include="CircularPictureBox.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="ConsoleView.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="ConsoleView.Designer.cs">
       <DependentUpon>ConsoleView.cs</DependentUpon>
     </Compile>
+    <Compile Include="CustomizeProfileAvatarView.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="CustomizeProfileAvatarView.Designer.cs">
+      <DependentUpon>CustomizeProfileAvatarView.cs</DependentUpon>
+    </Compile>
+    <Compile Include="CustomizeProfileColorView.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="CustomizeProfileColorView.Designer.cs">
+      <DependentUpon>CustomizeProfileColorView.cs</DependentUpon>
+    </Compile>
+    <Compile Include="CustomizeProfileView.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="CustomizeProfileView.Designer.cs">
+      <DependentUpon>CustomizeProfileView.cs</DependentUpon>
+    </Compile>
     <Compile Include="DetectJDK.cs" />
+    <Compile Include="Document.cs" />
     <Compile Include="Javapad.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Javapad.Designer.cs">
       <DependentUpon>Javapad.cs</DependentUpon>
     </Compile>
+    <Compile Include="Points.cs" />
     <Compile Include="ProblemsView.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="ProblemsView.Designer.cs">
       <DependentUpon>ProblemsView.cs</DependentUpon>
     </Compile>
+    <Compile Include="Profile.cs" />
+    <Compile Include="ProfileView.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ProfileView.Designer.cs">
+      <DependentUpon>ProfileView.cs</DependentUpon>
+    </Compile>
     <Compile Include="Program.cs" />
+    <Compile Include="ProjectEuler.cs" />
+    <Compile Include="ProjectEulerView.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ProjectEulerView.Designer.cs">
+      <DependentUpon>ProjectEulerView.cs</DependentUpon>
+    </Compile>
     <Compile Include="Prompt.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RegistryManager.cs" />
+    <Compile Include="Settings.cs" />
     <EmbeddedResource Include="About.resx">
       <DependentUpon>About.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="ConsoleView.resx">
       <DependentUpon>ConsoleView.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="CustomizeProfileAvatarView.resx">
+      <DependentUpon>CustomizeProfileAvatarView.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="CustomizeProfileColorView.resx">
+      <DependentUpon>CustomizeProfileColorView.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="CustomizeProfileView.resx">
+      <DependentUpon>CustomizeProfileView.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Javapad.resx">
       <DependentUpon>Javapad.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="ProblemsView.resx">
       <DependentUpon>ProblemsView.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ProfileView.resx">
+      <DependentUpon>ProfileView.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ProjectEulerView.resx">
+      <DependentUpon>ProjectEulerView.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
@@ -166,6 +266,49 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="javapad_icon.ico" />
+    <None Include="Resources\afghanistanFlag.png" />
+    <None Include="Resources\luffy.png" />
+    <None Include="Resources\assembly.png" />
+    <None Include="Resources\naurot.png" />
+    <None Include="Resources\matrix1.png" />
+    <None Include="Resources\girleyes.png" />
+    <None Include="Resources\girlsharingan.png" />
+    <None Include="Resources\princeofpersia.png" />
+    <None Include="Resources\halo4.png" />
+    <None Include="Resources\rick.png" />
+    <None Include="Resources\midnightclub.png" />
+    <None Include="Resources\tdotskyline.png" />
+    <None Include="Resources\dubai.png" />
+    <None Include="Resources\matrix.png" />
+    <None Include="Resources\halo2.png" />
+    <None Include="Resources\halobg.png" />
+    <None Include="Resources\halo3.png" />
+    <None Include="Resources\halo0.png" />
+    <None Include="Resources\codes2.png" />
+    <None Include="Resources\codes.png" />
+    <None Include="Resources\oldpc.png" />
+    <None Include="Resources\windowsNT.png" />
+    <None Include="Resources\win98.png" />
+    <None Include="Resources\steinsgate.png" />
+    <None Include="Resources\zero2.png" />
+    <None Include="Resources\zero1.png" />
+    <None Include="Resources\kidgokussj3.png" />
+    <None Include="Resources\dexterslab.png" />
+    <None Include="Resources\browseImages.png" />
+    <None Include="Resources\zoom-out-yellow.png" />
+    <None Include="Resources\zoom-in-yellow.png" />
+    <None Include="Resources\zoom-out.png" />
+    <None Include="Resources\zoom-in.png" />
+    <None Include="Resources\left_arrow_dark.png" />
+    <None Include="Resources\right_arrow_dark.png" />
+    <None Include="Resources\haloavatar1.jpg" />
+    <None Include="Resources\project_euler_problems.txt" />
+    <None Include="Resources\podium.png" />
+    <None Include="Resources\medal.png" />
+    <None Include="Resources\star.png" />
+    <None Include="Resources\dexterlab.png" />
+    <None Include="Resources\right_arrow.png" />
+    <None Include="Resources\left_arrow.png" />
     <None Include="Resources\run.png" />
   </ItemGroup>
   <ItemGroup>

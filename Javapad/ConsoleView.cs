@@ -53,11 +53,9 @@ namespace Javapad
             if (InvokeRequired)
             {
                 // Create a delegate of this method and let the form run it.
-                // this.Invoke(new TextDelegate(UpdateText), new object[] { text }, new object[] { append } ); ????
                 this.Invoke(new TextDelegate(UpdateText), new object[] { text, append });
-                return; // Important
+                return;
             }
-
             // Set textBox
             if (append)
             {
@@ -82,16 +80,10 @@ namespace Javapad
                 int line = richTextBox1.GetLineFromCharIndex(index);
                 string text = richTextBox1.Lines[line];
                 int firstChar = richTextBox1.GetFirstCharIndexFromLine(line);
-                // static works!
-                if (!Javapad.InterProcess.HasExited)
+                // delegate 
+                if (!Javapad.InterProcDelegate().HasExited)
                 {
-                    Javapad.InterProcess.StandardInput.WriteLine(text);
-                }
-                else
-                {
-                    //MessageBox.Show("OKkk");
-                    //Form1 f = new Form1();
-                    // f.btnTerminate.Visible = false;
+                    Javapad.InterProcDelegate().StandardInput.WriteLine(text);
                 }
             }
         }

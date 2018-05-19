@@ -9,11 +9,14 @@ namespace Javapad
 {
     public static class Prompt
     {
-        private static string saveFile = "";
+        /// <summary>
+        /// Dialog
+        /// Save, don't save, cancel
+        /// </summary>
         private static int less = 39;
-        public static Form prompt = new Form();
-        public static string ShowDialog(string file, Point location)
+        public static DialogResult ShowDialog(string file, Point location)
         {
+            Form prompt = new Form();
             prompt.StartPosition = FormStartPosition.Manual;
             prompt.Location = location;
             prompt.FormBorderStyle = FormBorderStyle.FixedToolWindow;
@@ -50,20 +53,15 @@ namespace Javapad
                 dont_save.Location = new Point(dont_save.Location.X, dont_save.Location.Y - less);
                 cancel.Location = new Point(cancel.Location.X, cancel.Location.Y - less);
             }
-            save.Click += (sender, e) => { saveFile = "save"; prompt.DialogResult = DialogResult.OK; prompt.Close(); };
-            dont_save.Click += (sender, e) => { saveFile = "dont_save"; prompt.DialogResult = DialogResult.OK; prompt.Close(); };
-            cancel.Click += (sender, e) => { saveFile = "cancel"; prompt.Close(); };
+            save.Click += (sender, e) => { prompt.DialogResult = DialogResult.OK; prompt.Close(); };
+            dont_save.Click += (sender, e) => { prompt.DialogResult = DialogResult.Abort; prompt.Close(); };
+            cancel.Click += (sender, e) => { prompt.DialogResult = DialogResult.Cancel; prompt.Close(); };
             prompt.Controls.Add(panel1);
             prompt.Controls.Add(save);
             prompt.Controls.Add(dont_save);
             prompt.Controls.Add(cancel);
             prompt.ShowDialog();
-            return saveFile;
-        }
-        public static void setLocation(int x, int y)
-        {
-            //prompt.Location = new 
-            prompt.Location = new Point(x, y);
+            return prompt.DialogResult; 
         }
     }
 }

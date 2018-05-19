@@ -18,7 +18,16 @@ namespace Javapad
             this.labelVersion.Text = String.Format("Version {0}", AssemblyVersion);
             this.labelCopyright.Text = AssemblyCopyright;
             this.labelCompanyName.Text = AssemblyCompany;
-            this.textBoxDescription.Text = AssemblyDescription;
+            string descText = "Bismillah" + Environment.NewLine + Environment.NewLine +
+                "Facebook Profile: https://www.facebook.com/profile.php?id=100008730390533" + Environment.NewLine + Environment.NewLine +
+                "- Alpha Version -" + Environment.NewLine +
+                "I made this app for new Java programmers.Sometimes the new programmers find it difficult to make sure[javac.exe & java.exe] are properly added to the Windows Environment Variables.Although, the Java JDK is portable but its portable usage isn’t usually a teacher’s first priority.This app auto - detects the JDK and eliminates the new learner from overwhelming stress of writing and compiling your code using NOTEPAD and CMD.This app is designed to replace NOTEPAD." + Environment.NewLine + Environment.NewLine +
+                "- Future Updates -" + Environment.NewLine +
+                "This app will integrate offline books and games to help make the Java learning process breeze and fun.A lot of great features will be introduced in the BETA version of this app." + Environment.NewLine +
+                "I developed this app using C#, BUILD .NET 4 client profile." + Environment.NewLine + Environment.NewLine +
+                "Thank you for using my app.";
+
+            this.textBoxDescription.Text = descText;//AssemblyDescription;
         }
         public void setLocation(int x, int y)
         {

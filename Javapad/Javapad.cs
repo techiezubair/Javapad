@@ -5,7 +5,6 @@ using System.Data;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -14,6 +13,8 @@ namespace Javapad
 {
     public partial class Javapad : Form
     {
+        public static Point location;
+        #region Editor variables for color coding
         private Dictionary<string, string[]> encode = new Dictionary<string, string[]>();
         private string[] keywordset1 = { "public", "private", "protected", "class", "true", "false" };
         private string[] keywordset2 = { "System.out" };
@@ -31,45 +32,68 @@ namespace Javapad
         private const string COLOR5 = "#4cc386"; // light green
         private const string COLOR6 = "#608b3a"; // green for comments
         private const string COLOR7 = "#c586c0"; // purple 
+        #endregion
+
+        private string jdk_path = "";
+        private string file = "";
+        private string hoverBackColor = "#812e96";
 
         private bool expand = false;
         private bool isHoldCtrl = false;
-        private bool fileSaved = true;
-        private bool tab = false;
+        private bool isRunning = false;
+        private bool run = false;
+        // keyboard shortcuts
+        private bool shift = false;
 
+        private const int MIN_EXPAND = 60;
         private int currentCol = 1;
         private int currentLine = 1;
         private int currentPos = 1;
         private int curr_position = 0;
         private int counter = 0;
-
-        private const int MIN_EXPAND = 60;
-        private string file = "";
-        private string filename = "";
-        About about;
-
+        
+        private Document doc;
+        private DialogResult state;
+        private About about;
+        private static Javapad form = null;
         private ConsoleView consoleView = new ConsoleView();
         private ProblemsView problemsView = new ProblemsView();
-
+        private ProjectEulerView eulerView = new ProjectEulerView();
+        private ProfileView profileView = new ProfileView();
         private DetectJDK detectJDK = new DetectJDK();
-        private string jdk_path = "";
+        
+        
+        private Process InterProc = new Process();
+        private Process process = new Process();
 
-        static Process InterProc = new Process();
-        Process process = new Process();
-        bool isRunning = false;
-        
-        public static Process InterProcess
+        #region Delegate Process
+        private delegate Process ProcInter();
+        public static Process InterProcDelegate()
         {
-            get { return InterProc; }
+            return form.InterProc;
         }
-        
+        private Process UpdateInterProcDelegate()
+        {
+            if (InvokeRequired)
+            {
+                this.Invoke(new ProcInter(UpdateInterProcDelegate));
+                return InterProc;
+            }
+            return InterProc;
+        }
+        #endregion
+
         public Javapad()
         {
             InitializeComponent();
         }
 
+        #region Javapad Form functions [about me, prompt] + extra functions
         private void Javapad_Load(object sender, EventArgs e)
         {
+            form = this;
+            location = this.Location;
+            doc = new Document();
             encode.Add(COLOR1, keywordset1);
             encode.Add(COLOR2, keywordset2);
             encode.Add(COLOR6, keywordset3);
@@ -79,14 +103,107 @@ namespace Javapad
             lineBox.Font = editorBox.Font;
             editorBox.Select();
             AddLineNumbers();
-            showConsolePanel();
+            ShowPanel(consoleView, lblConsole);
             posLabel.Text = "Ln " + currentLine + ", Col " + currentCol + ", Pos " + currentPos;
+            // Detect JDK [also runs the registry functions]
             searchJDKWorker.RunWorkerAsync();
-            if(!String.IsNullOrEmpty(Properties.Settings.Default.jdkPath))
+            
+            if (!String.IsNullOrEmpty(RegistryManager.JDKPath))
             {
-                jdk_path = Properties.Settings.Default.jdkPath;
+                jdk_path = RegistryManager.JDKPath;
             }
         }
+        private void Javapad_Resize(object sender, EventArgs e)
+        {
+            if(this.WindowState != FormWindowState.Minimized)
+            {
+                if (outputExpander.Location.Y < 0)
+                {
+                    outputExpander.Location = new Point(0, 10);
+                    ExpanderMove(0);
+                }
+                if (outputExpander.Location.Y > this.Height)
+                {
+                    outputExpander.Location = new Point(0, this.Height - MIN_EXPAND - 60);
+                    ExpanderMove(0);
+                }
+            }
+            
+        }
+        private void Javapad_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (!doc.IsSaved)
+            {
+                prompt();
+                if (state == DialogResult.Abort)
+                {
+                    // call this if newWindow() creates another thread
+                    // Application.ExitThread();
+                    // but since newWindow calls Javapad.exe, we can use .Exit()
+                    Application.Exit();
+                }
+                else
+                {
+                    e.Cancel = true;
+                }
+            }
+            else
+            {
+                // Application.ExitThread();
+                Application.Exit();
+            }
+        }
+        private void aboutMeLabel_MouseEnter(object sender, EventArgs e)
+        {
+            aboutMeLabel.BackColor = convertColor(hoverBackColor);
+        }
+
+        private void aboutMeLabel_MouseLeave(object sender, EventArgs e)
+        {
+            aboutMeLabel.BackColor = bottomPanel.BackColor;
+        }
+        private void aboutMeLabel_Click(object sender, EventArgs e)
+        {
+            showAbout();
+        }
+        private void showAbout()
+        {
+            if (about != null && !about.IsDisposed)
+            {
+                about.BringToFront();
+                about.Show();
+                about.setLocation(this.Location.X + 80, this.Location.Y + 80);
+            }
+            else
+            {
+                about = new About();
+                about.Show();
+                about.setLocation(this.Location.X + 80, this.Location.Y + 80);
+            }
+        }
+        private void prompt()
+        {
+            Point location = new Point(this.Location.X + 80, this.Location.Y + 100);
+            state = Prompt.ShowDialog(file, location);
+
+            if (state == DialogResult.OK)
+            {
+                save();
+                newFile();
+            }
+            else if (state == DialogResult.Abort)
+            {
+                newDoc();
+            }
+
+        }
+        private Color convertColor(string color)
+        {
+            return System.Drawing.ColorTranslator.FromHtml(color);
+        }
+        #endregion
+        
+        #region EditorBox and LineNumbers _all
         public void AddLineNumbers()
         {
             // create & set Point pt to (0,0)    
@@ -132,6 +249,19 @@ namespace Javapad
 
             return w;
         }
+        private void reEncode()
+        {
+            foreach (var line in editorBox.Lines)
+            {
+                foreach(var word in encode)
+                {
+                    for (int i = 0; i < word.Value.Length; i++)
+                    {
+                        //color(textBox, start, word.Key, word.Value[i]);
+                    }
+                }
+            }
+        }
         private void encodeData(RichTextBox textBox, int start, Dictionary<string, string[]> encode)
         {
             foreach (var word in encode)
@@ -149,25 +279,21 @@ namespace Javapad
                 if (start >= keyword.Length)
                 {
                     counter++;
+                    // it's better to customize richTextbox 
+                    // perhaps in the beta version...
+                    /*
                     // check if the line contains a single line comment 
                     int currentLine = textBox.GetLineFromCharIndex(start);
                     int firstCharofLine = textBox.GetFirstCharIndexFromLine(currentLine);
                     string lineText = "";
-                    try
-                    {
-                        //lineText = textBox.Lines[currentLine];
-                    }catch(IndexOutOfRangeException ex)
-                    {
-
-                    }
+                    lineText = textBox.Lines[currentLine];
                     int posOfComment = lineText.IndexOf("//");
                     if (lineText.Contains("//"))
                     {
                         textBox.Select(firstCharofLine + posOfComment, lineText.Length);
                         textBox.SelectionColor = convertColor(COLOR6);
                         textBox.Select(start, 0);
-                    }
-                    else
+                    }*/
                     {
                         textBox.ForeColor = Color.White;
                         int pos = textBox.Find(keyword, start - keyword.Length, start, RichTextBoxFinds.MatchCase);
@@ -179,7 +305,6 @@ namespace Javapad
                         }
                     }
 
-
                 }
 
                 textBox.SelectionColor = Color.White;
@@ -189,31 +314,7 @@ namespace Javapad
                 //Console.WriteLine(ex);
             }
         }
-        private Color convertColor(string color)
-        {
-            return System.Drawing.ColorTranslator.FromHtml(color);
-        }
-
-        private void showConsolePanel()
-        {
-            lblConsole.Font = new Font(lblConsole.Font.Name, lblConsole.Font.SizeInPoints, FontStyle.Underline);
-            lblProblems.Font = new Font(lblProblems.Font.Name, lblProblems.Font.SizeInPoints, FontStyle.Regular);
-            consoleView.TopLevel = false;
-            outputBodyPanel.Controls.Remove(problemsView);
-            outputBodyPanel.Controls.Add(consoleView);
-            consoleView.Show();
-        }
-
-        private void showProblemsPanel()
-        {
-            lblProblems.Font = new Font(lblProblems.Font.Name, lblProblems.Font.SizeInPoints, FontStyle.Underline);
-            lblConsole.Font = new Font(lblConsole.Font.Name, lblConsole.Font.SizeInPoints, FontStyle.Regular);
-            problemsView.TopLevel = false;
-            outputBodyPanel.Controls.Remove(consoleView);
-            outputBodyPanel.Controls.Add(problemsView);
-            problemsView.Show();
-        }
-
+        
         private void editorBox_Click(object sender, EventArgs e)
         {
             currentPos = editorBox.SelectionStart + 1;
@@ -234,272 +335,45 @@ namespace Javapad
 
         private void editorBox_FontChanged(object sender, EventArgs e)
         {
-            //Console.WriteLine("font changed!");
             lineBox.Font = editorBox.Font;
             editorBox.Select();
             AddLineNumbers();
         }
-        bool shift = false;
+
         private void editorBox_KeyDown(object sender, KeyEventArgs e)
         {
+            bool ctrlV = e.Modifiers == Keys.Control && e.KeyCode == Keys.V;
+            bool shiftIns = e.Modifiers == Keys.Shift && e.KeyCode == Keys.Insert;
+            bool ctrlShiftO = e.Modifiers == (Keys.Control | Keys.Shift) && e.KeyCode == Keys.X;
 
             if (e.KeyCode == Keys.ControlKey)
             {
                 lineBox.ZoomFactor = editorBox.ZoomFactor;
-                isHoldCtrl = true;
-                //isPaste = false;
-                //MessageBox.Show("paste");
             }
-            if (isHoldCtrl)
+            if (ctrlV || shiftIns)
             {
-                if (e.KeyCode == Keys.V)
-                {
-                    editorBox.SuspendLayout();
-                    editorBox.ForeColor = Color.White;
-                    // get insertion point
-                    int insPt = editorBox.SelectionStart;
-                    // preserve text from after insertion pont to end of RTF content
-                    string postRTFContent = editorBox.Text.Substring(insPt);
-                    // remove the content after the insertion point
-                    editorBox.Text = editorBox.Text.Substring(0, insPt);
-                    // add the clipboard content and then the preserved postRTF content
-                    editorBox.Text += (string)Clipboard.GetData("Text") + postRTFContent;
-                    // adjust the insertion point to just after the inserted text
-                    editorBox.SelectionStart = editorBox.TextLength - postRTFContent.Length;
-                    // restore layout
-                    editorBox.ResumeLayout();
-                    // cancel the paste
-                    e.Handled = true;
-                }
-                // open file 
-                if (e.KeyCode == Keys.O)
-                {
-                    //Console.WriteLine("open file");
-                    isHoldCtrl = false;
-                    openFile();
-                }
-                // save file
-                if (e.KeyCode == Keys.S && !shift)
-                {
-                    //Console.WriteLine("save file");
-                    isHoldCtrl = false;
-                    save();
-                }
-                // close this and open a new file...
-                if (e.KeyCode == Keys.N)
-                {
-                    //Console.WriteLine("new file");
-                    newFile();
-                    isHoldCtrl = false;
-                }
-                if(e.KeyCode == Keys.ShiftKey)
-                {
-                    //Console.WriteLine("shift pressed");
-                    shift = true;
-                }
-                if (shift)
-                {
-                    //Console.WriteLine("s is true");
-                    if(e.KeyCode == Keys.S)
-                    {
-                        Console.WriteLine("prompt to save as");
-                        saveAs();
-                        shift = false;
-                        isHoldCtrl = false;
-                    }
-                    if(e.KeyCode == Keys.N)
-                    {
-                        // new window
-                        newWindow();
-                    }
-                }
+                editorBox.ForeColor = Color.White;
+                //editorBox.SuspendLayout();
+                // get insertion point
+                int insPt = editorBox.SelectionStart;
+                // preserve text from after insertion pont to end of RTF content
+                string postRTFContent = editorBox.Text.Substring(insPt);
+                // remove the content after the insertion point
+                editorBox.Text = editorBox.Text.Substring(0, insPt);
+                // add the clipboard content and then the preserved postRTF content
+                editorBox.Text += (string)Clipboard.GetData("Text") + postRTFContent;
+                // adjust the insertion point to just after the inserted text
+                editorBox.SelectionStart = editorBox.TextLength - postRTFContent.Length;
+                // restore layout
+                //editorBox.ResumeLayout();
+                // cancel the paste
+                reEncode();
+                e.Handled = true;
             }
-            if (e.KeyCode == Keys.F5)
-            {
-                /*string file = editorBox.Text;
-                using (StreamWriter sw = new StreamWriter("Test.java", false))
-                {
-                    sw.WriteLine(file);
-                }*/
-                //MessageBox.Show(Properties.Settings.Default.jdkFound + " and " + jdk_path);
-
-                //compile(true);
-                F5();
-                
-                //Console.WriteLine("\"" + file + "\"");
-                // usage
-                //compilerWorker.RunWorkerAsync();
-                //compile(true); // compile and run
-
-            }
-            if(e.KeyCode == Keys.F4)
-            {
-                //Console.WriteLine("f4 pressed");
-                // first save the file
-
-                //compile_run = true;
-                F4();
-            }
-
-        }
-        private void F5()
-        {
-            compile_run = true;
-            save();
-        }
-        private void F4()
-        {
-            save();
-            // only compile
-            compile(false);
-        }
-        private bool compile_run = false;
-        private bool run = false;
-        private void compile(bool run)
-        {
-            this.run = run;
-            if(!String.IsNullOrEmpty(file))
-                compilerWorker.RunWorkerAsync();
-        }
-        private void saveAs()
-        {
-            //Console.WriteLine("saveAs exec");
-            saveFileDialog = new SaveFileDialog();
-            saveFileDialog.Title = "Save As";
-            saveFileDialog.Filter = "Java files (*.java)|*.java|txt files (*.txt)|*.txt|All files (*.*)|*.*";
-            saveFileDialog.FilterIndex = 1;
-            saveFileDialog.RestoreDirectory = true;
-            if (saveFileDialog.ShowDialog() == DialogResult.OK)
-            {
-                file = saveFileDialog.FileName;
-                Console.WriteLine("dialogok");
-                if (compile_run)
-                {
-
-                    compile(true);
-                    compile_run = false;
-                    Console.WriteLine("dialogok internal");
-                }
-                editorBox.SaveFile(saveFileDialog.FileName, RichTextBoxStreamType.PlainText);
-                this.Text = "Javapad - " + saveFileDialog.FileName;
-                fileSaved = true;
-            }else
-            {
-                saveFileDialog = null;
-                fileSaved = false;
-            }
-        }
-        SaveFileDialog saveFileDialog;
-        private void save()
-        {
-
-            if (saveFileDialog != null || openFileDialog != null)
-            {
-                //Console.WriteLine("NULL both exec");
-                if (saveFileDialog != null)
-                {
-                    file = saveFileDialog.FileName;
-                    //Console.WriteLine("saveFile: " + file);
-                }
-                if(openFileDialog != null)
-                {
-                    file = openFileDialog.FileName;
-                    //Console.WriteLine("openFile: " + file);
-                }
-                using (StreamWriter sw = new StreamWriter(file, false))
-                {
-                    sw.WriteLine(editorBox.Text);
-                    fileSaved = true;
-                }
-                if (compile_run)
-                {
-
-                    compile(true);
-                    compile_run = false;
-                    Console.WriteLine("dialogok internal");
-                }
-            }
-            else
-            {
-                saveAs();   
-                /*if (openFileDialog1 != null)
-                {
-                    Console.WriteLine(openFileDialog1.FileName);
-                    /*
-                    using (StreamWriter sw = new StreamWriter(openFileDialog1.FileName, false))
-                    {
-                        sw.WriteLine(editorBox.Text);
-                    }
-
-                }
-                else
-                {
-                    Console.WriteLine("Untitled document");
-                    if (saveFileDialog.ShowDialog() == DialogResult.OK)
-                    {
-                        editorBox.SaveFile(saveFileDialog.FileName, RichTextBoxStreamType.PlainText);
-                    }
-                }*/
-            }
-            
-        }
-        OpenFileDialog openFileDialog;
-        private void openFile()
-        {
-            openFileDialog = new OpenFileDialog();
-
-            openFileDialog.Filter = "Java files (*.java)|*.java|txt files (*.txt)|*.txt|All files (*.*)|*.*";
-            openFileDialog.FilterIndex = 1;
-            openFileDialog.RestoreDirectory = true;
-
-            if (openFileDialog.ShowDialog() == DialogResult.OK)
-            {
-                try
-                {
-                   
-                    editorBox.Text = File.ReadAllText(openFileDialog.FileName);
-                    this.Text = "Javapad - " + openFileDialog.FileName;
-                    //fileSaved = true;
-                       
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Error: Could not read file from disk. Original error: " + ex.Message);
-                }
-            }else
-            {
-                openFileDialog = null;
-            }
-        }
-        private void newFile()
-        {
-            //Console.WriteLine("fileSaved:::::: " + fileSaved);
-            if (fileSaved)
-            {
-                editorBox.Text = "";
-                this.Text = "Javapad - Untitled";
-            }
-            else
-            {
-                save();
-                if (fileSaved)
-                {
-                    editorBox.Text = "";
-                    // call it again cuz we changed the text
-                    this.Text = "Javapad - Untitled";
-                }
-            }
-            //fileSaved = false;
-            
-        }
-        private void newWindow()
-        {
-            Javapad j = new Javapad();
-            j.Show();
+             
         }
         private void editorBox_KeyUp(object sender, KeyEventArgs e)
         {
-            //Console.WriteLine("ishold" + isHoldCtrl);
             isHoldCtrl = false;
             currentPos = editorBox.SelectionStart + 1;
             currentLine = editorBox.GetLineFromCharIndex(currentPos) + 1;
@@ -526,10 +400,11 @@ namespace Javapad
 
         private void editorBox_TextChanged(object sender, EventArgs e)
         {
-            fileSaved = false;
+            if (doc != null)
+                doc.IsSaved = false;
             curr_position = editorBox.SelectionStart;
             encodeData(editorBox, curr_position, encode);
-            
+
         }
 
         private void editorBox_VScroll(object sender, EventArgs e)
@@ -538,6 +413,30 @@ namespace Javapad
             AddLineNumbers();
             lineBox.Invalidate();
         }
+        #endregion
+
+        #region Body (top) panel
+        private void outputBodyPanel_Resize(object sender, EventArgs e)
+        {
+            if (consoleView != null)
+            {
+                consoleView.Size = outputBodyPanel.Size;
+            }
+            if (problemsView != null)
+            {
+                problemsView.Size = outputBodyPanel.Size;
+            }
+            if(eulerView != null)
+            {
+                eulerView.Size = outputBodyPanel.Size;
+            }
+            if(profileView != null)
+            {
+                profileView.Size = outputBodyPanel.Size;
+            }
+        }
+        #endregion
+        #region Expander
         private void outputExpander_MouseDown(object sender, MouseEventArgs e)
         {
             expand = true;
@@ -574,43 +473,308 @@ namespace Javapad
                 outputPanel.Height -= 12;
             }
         }
-        #region Console Run After Compiled
+        #endregion
+        #region Bottom Panel
+        private void lblOutput_Click(object sender, EventArgs e)
+        {
+            ShowPanel(consoleView, lblConsole);
+            /*if (ExpanderMove(0) > this.Height - MIN_EXPAND - 100)
+                ExpanderMove(-100); */
+        }
+
+        private void lblProblems_Click(object sender, EventArgs e)
+        {
+            ShowPanel(problemsView, lblProblems);
+        }
+        private void _showConsolePanel()
+        {
+            lblConsole.Font = new Font(lblConsole.Font.Name, lblConsole.Font.SizeInPoints, FontStyle.Underline);
+            lblProblems.Font = new Font(lblProblems.Font.Name, lblProblems.Font.SizeInPoints, FontStyle.Regular);
+            consoleView.TopLevel = false;
+            outputBodyPanel.Controls.Remove(problemsView);
+            outputBodyPanel.Controls.Add(consoleView);
+            consoleView.Show();
+        }
+
+        private void _showProblemsPanel()
+        {
+            lblProblems.Font = new Font(lblProblems.Font.Name, lblProblems.Font.SizeInPoints, FontStyle.Underline);
+            lblConsole.Font = new Font(lblConsole.Font.Name, lblConsole.Font.SizeInPoints, FontStyle.Regular);
+            problemsView.TopLevel = false;
+            outputBodyPanel.Controls.Remove(consoleView);
+            outputBodyPanel.Controls.Add(problemsView);
+            problemsView.Show();
+        }
+        #region bottom bar
+        private void setBottomBackColor(string color, string backColor)
+        {
+            bottomPanel.BackColor = convertColor(color);
+            // set the hover backcolor for each label
+            hoverBackColor = backColor;
+            // and the labels...
+            jdkLabel.BackColor = convertColor(color);
+            aboutMeLabel.BackColor = convertColor(color);
+            posLabel.BackColor = convertColor(color);
+        }
+        private void jdkLabel_MouseClick(object sender, MouseEventArgs e)
+        {
+
+        }
+
+        private void jdkLabel_MouseEnter(object sender, EventArgs e)
+        {
+            jdkLabel.BackColor = convertColor(hoverBackColor);
+        }
+
+        private void jdkLabel_MouseLeave(object sender, EventArgs e)
+        {
+            jdkLabel.BackColor = bottomPanel.BackColor;
+        }
+        #endregion
+        #endregion
+
+        #region PressedKeys Functions
+        private void F5()
+        {
+            //if(!doc.IsSaved)
+                save();
+            if (String.IsNullOrEmpty(file)) file = doc.File;
+            // compile & run
+            compile(true);
+        }
+        private void F7()
+        {
+            //if (!doc.IsSaved)
+                save();
+            if (String.IsNullOrEmpty(file)) file = doc.File;
+            // only compile
+            compile(false);
+        }
+        #endregion
+
+        #region Document Functions
+        private void setFormTitle(string title)
+        {
+            this.Text = System.AppDomain.CurrentDomain.FriendlyName +" - " + title;
+        }
+        private void newDoc()
+        {
+            editorBox.Text = "";
+            doc.IsSaved = true;
+            setFormTitle("Untitled");
+        }
+        private void readDoc(string filepath)
+        {
+            if (!String.IsNullOrEmpty(filepath))
+                editorBox.Text = File.ReadAllText(filepath);
+            setFormTitle(filepath);
+        }
+        private void saveDoc(string file)
+        {
+            if (!String.IsNullOrEmpty(file))
+                editorBox.SaveFile(file, RichTextBoxStreamType.PlainText);
+        }
+        private void newFile()
+        {
+            if (doc != null)
+            {
+                if (doc.IsSaved)
+                {
+                    doc = new Document();
+                    newDoc();
+                }
+                else
+                {
+                    prompt();
+                }
+            }
+            else
+                doc = new Document();
+        }
+        private void openFile()
+        {
+            if (doc.IsSaved)
+            {
+                readDoc(file = doc.Open());
+                doc.IsSaved = true;
+                setFormTitle(file);
+            }
+            else
+            {
+                prompt();
+                if(state == DialogResult.Cancel)
+                {
+
+                }else
+                {
+                    openFile();
+                }
+            }
+        }
+        private void save()
+        {
+            string text = editorBox.Text;
+            doc.Save(text);
+            if (!String.IsNullOrEmpty(doc.File))
+                setFormTitle(doc.File);
+        }
+        private void saveAs()
+        {
+            string text = editorBox.Text;
+            saveDoc(doc.SaveAs(text));
+            if(!String.IsNullOrEmpty(doc.File))
+                setFormTitle(doc.File);
+        }
+        
+        private void newWindow()
+        {
+            /*Javapad j = new Javapad();
+            var newApp = new Thread(() => Application.Run(j));
+            newApp.SetApartmentState(ApartmentState.STA);
+            newApp.Start();*/
+            // it doesn't work when debugging
+            // visualstudio adds vshost in the appname [appname.vshost.exe]
+            Process.Start(System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName);
+        }
+        #endregion
+
+        #region Compile 
+        private void compile(bool run)
+        {
+            this.run = run;
+            if (!String.IsNullOrEmpty(file))
+            {
+                if (!compilerWorker.IsBusy)
+                    compilerWorker.RunWorkerAsync();
+                else
+                    MessageBox.Show("Compiler is busy, please try again.");
+            }
+        }
+
+        private void compilerWorker_DoWork(object sender, DoWorkEventArgs e)
+        {
+            if (RegistryManager.JDKFound)
+                compiler(RegistryManager.JDKPath);
+            else
+                MessageBox.Show("JDK Not found!");
+        }
+        private void compiler(string jdkpath)
+        {
+            
+            if (String.IsNullOrEmpty(jdkpath))
+                jdkpath = "javac";
+            else
+                jdkpath = jdkpath + "javac.exe";
+            process.StartInfo = new ProcessStartInfo()
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                FileName = jdkpath,
+                Arguments = "\"" + doc.File + "\"",
+                RedirectStandardError = true,
+                RedirectStandardOutput = true
+            };
+            process.EnableRaisingEvents = true;
+            process.Start();
+
+            while (!process.HasExited)
+            {
+                Thread.Sleep(1000);
+                if (!process.HasExited)
+                    process.Kill();
+            }
+        }
+        private void compilerWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            if (process.ExitCode == 0)
+            {
+                ConsoleView.TextBox().Text = "";
+                setBottomBackColor("#008000", "#50cf50");
+                ShowPanel(consoleView, lblConsole);
+                runWorker.RunWorkerAsync();
+            }
+            else
+            {
+                string output = process.StandardError.ReadToEnd();
+                int error = CompileErrors(output);
+                setBottomBackColor("#ff0000", "#f72929");
+                ShowPanel(problemsView, lblProblems);
+                ProblemsView.TextBox().Text = output;
+                ProblemsView.TextBox().SelectionStart = ProblemsView.TextBox().Text.Length;
+                ProblemsView.TextBox().ScrollToCaret();
+                // change this to a grid view...
+                /*if (error > 0)
+                    lblProblems.Text = "PROBLEMS " + error;
+                else
+                    lblProblems.Text = "PROBLEMS -TOO MANY!";
+                    */
+            }
+        }
+        private int CompileErrors(string output)
+        { 
+            var result = output.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+            // Length - 2 because the last array is always empty output.Split
+            var numErrors = "";
+            if(result.Length > 2)
+                numErrors = result[result.Length - 2];
+            numErrors = numErrors.Replace("errors", "");
+            numErrors = numErrors.Replace("error", "");
+            int num = 0;
+            Int32.TryParse(numErrors, out num);
+            return num;
+        }
+        #endregion
+
+        #region Run [After Compiling]
 
         /// <summary>
         /// This console runs after the code is compiled
         /// it is required
         /// </summary>
-        private void Run(string jdkpath, string filepath, string jFile)
+        private void runWorker_DoWork(object sender, DoWorkEventArgs e)
+        {
+            string javaFile = file.Replace(".java", "");
+            var s = javaFile.Split('\\');
+            string filepath = "";
+            for (int i = 0; i < s.Length; i++)
+            {
+                if (i < s.Length - 1)
+                    filepath += s[i] + "\\\\";
+            }
+            javaFile = s[s.Length - 1];
+            if(RegistryManager.JDKFound)
+            {
+                if (run)
+                    Run(RegistryManager.JDKPath, filepath, javaFile, "testing 12 3");
+            }
+
+        }
+
+        private void runWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            // nothing to do yet...
+        }
+        private void Run(string jdkpath, string filepath, string jFile, string args)
         {
             try
             {
-                /*
-                 * An exception of type 'System.ComponentModel.Win32Exception' occurred in System.dll but was not handled in user code
-                   Additional information: The parameter is incorrect
-                   If there is a handler for this exception, the program may be safely continued.
-                 */
-                //Console.WriteLine("\"" + jdkpath + "\"java");
                 run = false;
-                // update the bottompanel to red
-                //bottomPanel.BackColor = Color.Orange;
+                // update the bottompanel to orange...
                 setBottomBackColor("#ffa500", "#f4b94e");
-
-
+                
                 if (String.IsNullOrEmpty(jdkpath))
-                {
                     jdkpath = "java";
-                }
                 else
-                {
                     jdkpath = jdkpath + "java.exe";
-                }
-                //fn = fn.Replace("\"\"", "");
+
+                // using isRunning for another component
+                // the component has not been implemented in this version yet...
                 if (isRunning) { InterProc = new Process(); isRunning = false; }
                 isRunning = true;
                 InterProc.StartInfo.UseShellExecute = false;
                 InterProc.StartInfo.FileName = jdkpath;
-                //Console.WriteLine("path: \"" + filepath + "\"  s::: " + jFile);
-                InterProc.StartInfo.Arguments = "-classpath \"" + filepath + "\" " + jFile;
+                InterProc.StartInfo.Arguments = "-classpath \"" + filepath + "\" " + jFile + " " + args;
                 InterProc.StartInfo.RedirectStandardInput = true;
                 InterProc.StartInfo.RedirectStandardOutput = true;
                 InterProc.StartInfo.RedirectStandardError = true;
@@ -619,7 +783,7 @@ namespace Javapad
                 InterProc.OutputDataReceived += new DataReceivedEventHandler(InterProcOutputHandler);
 
                 bool started = InterProc.Start();
-                // terminate button visible now
+                // terminate button visible now [a future for the beta version]
                 //btnTerminate.Enabled = true;
                 //btnTerminate.Visible = true;
                 InterProc.BeginOutputReadLine();
@@ -648,299 +812,12 @@ namespace Javapad
             if (InterProc.HasExited)
             {
                 setBottomBackColor("#68217a", "#812e96");
-                /*if (InterProc.ExitCode == 0)
-                {
-                    // orage 
-                    // orage ffa500
-                    setBottomBackColor("#68217a");
-                }else
-                {
-                    setBottomBackColor("#68217a");
-                }*/
+                //if (InterProc.ExitCode == 0)
             }
         }
         #endregion
-        private string hoverBackColor = "#812e96";
-        private void setBottomBackColor(string color, string backColor)
-        {
-            bottomPanel.BackColor = convertColor(color);
-            hoverBackColor = backColor;
-            // also the labels 812e96
-            jdkLabel.BackColor = convertColor(color);
-            aboutMeLabel.BackColor = convertColor(color);
-            posLabel.BackColor = convertColor(color);
-        }
-        private void compilerWorker_DoWork(object sender, DoWorkEventArgs e)
-        {
-            if (Properties.Settings.Default.jdkFound)
-            {
-                Console.WriteLine("running compilerWorker: " + jdk_path);
-                compiler(jdk_path);
-            }else
-            {
-                MessageBox.Show("JDK Not found!");
-            }
-
-        }
-        private void compiler(string jdkpath)
-        {
-            Console.WriteLine("file: "+  "\"" + file + "\"");
-            if (String.IsNullOrEmpty(jdkpath))
-            {
-                Console.WriteLine("jdk is null so run javac only");
-                jdkpath = "javac";
-            }else
-            {
-
-                jdkpath = jdkpath + "javac.exe";
-                Console.WriteLine("jdkpath: " + jdkpath);
-            }
-            process.StartInfo = new ProcessStartInfo()
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden,
-                FileName = jdkpath,
-                Arguments = "\"" + file + "\"",
-                RedirectStandardError = true,
-                RedirectStandardOutput = true
-            };
-            process.EnableRaisingEvents = true;
-            process.Start();
-            while (!process.HasExited)
-            {
-                Thread.Sleep(1000);
-                if (!process.HasExited)
-                    process.Kill();
-
-            }
-        }
-        private void compilerWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
-        {
-            if (process.ExitCode == 0)
-            {
-                //string output = process.StandardOutput.ReadToEnd();
-                //consoleBox.Text = "";
-                //ConsoleView.SetText("", false);
-                ConsoleView.TextBox().Text = "";
-                //pnlBottom.BackColor = Color.Green;
-                //bottomPanel.BackColor = Color.Green;
-                // green 008000
-                setBottomBackColor("#008000", "#50cf50");
-                showConsolePanel();
-                //Form1.displayConsolePanel();
-                //Form1.SetCompileStatus("Compiled");
-                runWorker.RunWorkerAsync();
-                //MessageBox.Show("a: " + a + " out: "+ output);
-            }
-            else
-            {
-                //MessageBox.Show("error");
-                //setCompileStatus("Compile Error");
-                //Form1.SetCompileStatus("Compile Error");
-                string output = process.StandardError.ReadToEnd();
-                string error = CompileErrors(output);
-                //Console.WriteLine("er" + error);
-                int errNum;
-                bool num = Int32.TryParse(error, out errNum);
-                //problemsBox.Text = output;
-                //problemsBox.SelectionStart = problemsBox.Text.Length;
-                //problemsBox.ScrollToCaret();
-                //bottomPanel.BackColor = Color.Red;
-                setBottomBackColor("#ff0000", "#f72929");
-                //Form1.displayProblemsPanel();
-                showProblemsPanel();
-                ProblemsView.TextBox().Text = output;
-                ProblemsView.TextBox().SelectionStart = ProblemsView.TextBox().Text.Length;
-                ProblemsView.TextBox().ScrollToCaret();
-                //ProblemsView;
-                if (num)
-                {
-                    //lblProblems.Text = "PROBLEMS " + errNum;
-
-                }
-                else
-                {
-                    //lblProblems.Text = "PROBLEMS -TOO MANY!";
-                }
-                //pnlBottom.BackColor = Color.Red;
-                //showProblemsPanel();
-                //Form1.displayProblemsPanel(true);
-                //MessageBox.Show("a: " + a + " out: " + output);
-            }
-        }
-        private string CompileErrors(string output)
-        {
-            var result = output.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None).Reverse().Take(2).ToArray();
-
-            var numErrors = "";
-            try
-            {
-                numErrors = result[1].Substring(0, result[1].IndexOf(' '));
-            }
-            catch (IndexOutOfRangeException ex)
-            {
-
-            }
-            return numErrors.Trim();
-        }
-        // DETECT jdk in the system!
-
-        private void runWorker_DoWork(object sender, DoWorkEventArgs e)
-        {
-            string javaFile = file.Replace(".java", "");
-            //Console.WriteLine("javaFile: " + javaFile);
-            var s = javaFile.Split('\\');
-            string filepath = "";
-            for(int i = 0; i < s.Length; i++)
-            {
-                if (i < s.Length-1)
-                    filepath += s[i] + "\\\\";
-            }
-            //Console.WriteLine("path: \"" + filepath + "\"  s::: " + s[s.Length - 1]);
-            javaFile = s[s.Length - 1];
-            //Console.WriteLine("path: \"" + filepath + "\"  s::: " + javaFile);
-            if (Properties.Settings.Default.jdkFound)
-            {
-                if (run)
-                    Run(jdk_path, filepath, javaFile);
-            }
-                
-        }
-
-        private void runWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
-        {
-
-        }
-
-        private void lblOutput_Click(object sender, EventArgs e)
-        {
-            showConsolePanel();
-            /*if (ExpanderMove(0) > this.Height - MIN_EXPAND - 100)
-                ExpanderMove(-100); */
-        }
-
-        private void lblProblems_Click(object sender, EventArgs e)
-        {
-            showProblemsPanel();
-        }
-
-        private void Javapad_Resize(object sender, EventArgs e)
-        {
-            if(outputExpander.Location.Y < 0)
-            {
-                outputExpander.Location = new Point(0, 10);
-                ExpanderMove(0);
-            }
-            if(outputExpander.Location.Y > this.Height)
-            {
-                outputExpander.Location = new Point(0, this.Height - MIN_EXPAND - 60);
-                ExpanderMove(0);
-            }
-        }
-
-        private void outputBodyPanel_Resize(object sender, EventArgs e)
-        {
-            if(consoleView != null)
-            {
-                consoleView.Size = outputBodyPanel.Size;
-            }
-            if(problemsView != null)
-            {
-                problemsView.Size = outputBodyPanel.Size;
-            }
-        }
-
-        private void jdkLabel_MouseClick(object sender, MouseEventArgs e)
-        {
-
-        }
-
-        private void jdkLabel_MouseEnter(object sender, EventArgs e)
-        {
-            jdkLabel.BackColor = convertColor(hoverBackColor);
-        }
-
-        private void jdkLabel_MouseLeave(object sender, EventArgs e)
-        {
-            jdkLabel.BackColor = bottomPanel.BackColor;
-        }
-
-        private void aboutMeLabel_MouseEnter(object sender, EventArgs e)
-        {
-            aboutMeLabel.BackColor = convertColor(hoverBackColor);
-        }
-
-        private void aboutMeLabel_MouseLeave(object sender, EventArgs e)
-        {
-            aboutMeLabel.BackColor = bottomPanel.BackColor; 
-        }
-        private void aboutMeLabel_Click(object sender, EventArgs e)
-        {
-            showAbout();
-        }
-
-        private void Javapad_FormClosing(object sender, FormClosingEventArgs e)
-        {
-            //Console.WriteLine("filesaved: " + fileSaved);
-            if (!fileSaved)
-            {
-                //SaveAlertBox saveBox = new SaveAlertBox();
-                prompt(true);
-                e.Cancel = true;
-            }
-        }
-        private void prompt(bool close)
-        {
-            //Console.WriteLine("fileSaved: " + fileSaved);
-            Point location = new Point(this.Location.X + 80, this.Location.Y + 100);//this.PointToScreen(this.Location);
-            Console.WriteLine(location.X + " " + location.Y);
-            string state = Prompt.ShowDialog(file, location);
-            if (close)
-            {
-                if (Prompt.prompt.DialogResult == DialogResult.OK)
-                {
-                    //Console.WriteLine("state: : " + state);
-                    if (state == "save")
-                    {
-                        save();
-                    }
-                    else if (state == "dont_save")
-                    {
-                        if (close)
-                            Process.GetCurrentProcess().Kill();
-                        else
-                        {
-                            editorBox.Text = "";
-                            this.Text = "Java - Untitled";
-
-                            fileSaved = true;
-                        }
-
-                    }
-                    //Console.WriteLine("fafterileSaved: " + fileSaved);
-                }
-                else //if(Prompt.prompt.DialogResult == DialogResult.Cancel)
-                {
-                    //Console.WriteLine("cancelled!!!!");
-                    state = "cancel";
-                    fileSaved = false;
-                }
-            }else
-            {
-                if (Prompt.prompt.DialogResult == DialogResult.OK)
-                {
-                    editorBox.Text = "";
-                    this.Text = "Java - Untitled";
-                    fileSaved = true;
-                }
-                else
-                {
-                    
-                }
-                
-            }
-        }
+        
+        #region Search in the background
         /*
          * This is to update jdkLabel from the thread 
          */
@@ -956,38 +833,28 @@ namespace Javapad
                 this.jdkLabel.ForeColor = color;
             }
         }
+
         private void searchJDKWorker_DoWork(object sender, DoWorkEventArgs e)
         {
             updateSearch("jdk: searching...", Color.Yellow);
+            // detects JDK and updates the registry
+            // look into DetectJDK Begin() function
             detectJDK.Begin();
-            if (Properties.Settings.Default.jdkFound)
-            {
-                jdk_path = Properties.Settings.Default.jdkPath;
-            }
+            if (RegistryManager.JDKFound)
+                jdk_path = RegistryManager.JDKPath;
+            
         }
 
         private void searchJDKWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
-            if (Properties.Settings.Default.jdkFound)
+            if (RegistryManager.JDKFound)
                 updateSearch("jdk: Detected", Color.White);
             else
                 updateSearch("jdk: NOT FOUND", Color.OrangeRed);
         }
-        private void showAbout()
-        {
-            if (about != null && !about.IsDisposed)
-            {
-                about.BringToFront();
-                about.Show();
-                about.setLocation(this.Location.X + 80, this.Location.Y + 80);
-            }
-            else
-            {
-                about = new About();
-                about.Show();
-                about.setLocation(this.Location.X + 80, this.Location.Y + 80);
-            }
-        }
+        #endregion
+
+        #region Menu Items _Click
         private void aboutToolStripMenuItem1_Click(object sender, EventArgs e)
         {
             showAbout();
@@ -995,14 +862,13 @@ namespace Javapad
 
         private void exitToolStripMenuItem1_Click(object sender, EventArgs e)
         {
-            Application.Exit();
+            //Application.Exit();
+            this.Close();
         }
 
         private void newToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            //newFile();
-            if(!fileSaved)
-                prompt(false);
+            newFile();
         }
 
         private void newWinToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1032,7 +898,58 @@ namespace Javapad
 
         private void buildSolutionToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            F4();
+            F7();
+        }
+        #endregion
+
+        private void jdkLabel_Click(object sender, EventArgs e)
+        {
+            DialogResult search = MessageBox.Show("Search Again?",
+                                                   "JDK & JRE Location",
+                                    MessageBoxButtons.YesNo,
+                                    MessageBoxIcon.Question);
+            if (search == DialogResult.Yes) { RegistryManager.UpdateJDK(false, ""); searchJDKWorker.RunWorkerAsync(); }
+        }
+        private void ShowPanel(Form view, Label label)
+        {
+            view.TopLevel = false;
+            outputBodyPanel.Controls.Clear();
+            outputBodyPanel.Controls.Add(view);
+            view.Invalidate();
+            view.Show();
+            RemoveLabelUnderLine();
+            label.Font = new Font(lblConsole.Font.Name, lblConsole.Font.SizeInPoints, FontStyle.Underline);
+        }
+        private void RemoveLabelUnderLine()
+        {
+            lblProjectEuler.Font = new Font(lblConsole.Font.Name, lblConsole.Font.SizeInPoints, FontStyle.Regular);
+            lblProfile.Font = new Font(lblConsole.Font.Name, lblConsole.Font.SizeInPoints, FontStyle.Regular);
+            lblConsole.Font = new Font(lblConsole.Font.Name, lblConsole.Font.SizeInPoints, FontStyle.Regular);
+            lblProblems.Font = new Font(lblProblems.Font.Name, lblProblems.Font.SizeInPoints, FontStyle.Regular);
+        }
+        private void lblProfile_Click(object sender, EventArgs e)
+        {
+            ShowPanel(profileView, lblProfile);
+            Console.WriteLine(ExpanderMove(0) + "");
+            if (ExpanderMove(0) > this.Height - 304)
+            {
+                // do this later!!! fix it
+                //MessageBox.Show(ExpanderMove(0)+" : " +(outputBodyPanel.Height - 81));
+                ExpanderMove(-160);
+            }
+        }
+
+        private void lblProjectEuler_Click(object sender, EventArgs e)
+        {
+            ShowPanel(eulerView, lblProjectEuler);
+            if (ExpanderMove(0) > this.Height - 225)
+                ExpanderMove(-160);
+        }
+
+        private void Javapad_Move(object sender, EventArgs e)
+        {
+            location = this.Location;
+            Console.WriteLine("form: Location: " + this.Location);
         }
     }
 }
